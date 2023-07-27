@@ -4,7 +4,6 @@ Reads axona .bin files from multiple sessions,
 then merges the files, downsamples to 6kHz, saves a .mat file for each tetrode.
 """
 
-import tqdm as tqdm #I'm not sure why this is even needed, but it stops an error?
 import spikeinterface as si
 import spikeinterface.extractors as se
 from scipy.io import savemat
