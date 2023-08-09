@@ -13,6 +13,13 @@ function [Filename] = writeNTTfromSI_ax(Inpath, Outpath, Filename)
 %get waveforms and timestamps
 load([Inpath,'\',Filename])
 
+%% add fourth channel if missing
+if min(size(Spikes)) == 3
+    filler = zeros(1,length(Spikes));
+    Spikes = [Spikes,filler];
+    clear filler
+end
+
 %% write .ntt
 
 Outname = strsplit(Filename,'.mat');
