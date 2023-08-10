@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Jul 25 18:40:21 2023
-
-@author: leemburg
-"""
 
 import spikeinterface as si
 import spikeinterface.extractors as se
