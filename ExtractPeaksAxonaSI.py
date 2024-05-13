@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
+
 import spikeinterface.extractors as se
+import spikeinterface as si
 import numpy as np
 from probeinterface import read_prb
 from spikeinterface.sortingcomponents.peak_detection import detect_peaks
@@ -11,11 +12,13 @@ from tqdm import tqdm
 InFolder = "E:/AxonaToNLXtest/"
 OutFolder = "E:/AxonaToNLXtest/pos/"
 Probepath ="C:/Users/leemburg/Desktop/OEphystest/"
-ChanList = 'chanlist.txt' # text file listing good and bad channels
+ChanList = 'Tetlist.txt' # text file listing good and bad channels
+BaseName = 'HD263-2811_'
 TetList = [2,4,6] #analyse only these tetrodes (1-based, as on drive)
+numsess = 3 #number of sessions to read (e.g: numsess = 4 reads bin 01 to 04)
 
 spike_thresh = 5 # detection threshold for spike detection is spike_thresh* signal SD
-spike_sign = 'both' #detect peaks. can be: 'neg', 'pos', 'both'
+spike_sign = 'pos' #detect peaks. can be: 'neg', 'pos', 'both'
 
 # !!! need to manually edit the .set files so that all channels get read. 
 
@@ -29,7 +32,7 @@ tetgrouping = np.array([0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,
 tetlist = np.loadtxt(InFolder + '/' + ChanList,
                  delimiter=",")
 
-for tetnum in range(8):
+for tetnum in range(16):
         thistet = np.where(tetgrouping==tetnum)
         thistet = np.array(thistet)
         thesewires = tetlist[tetnum,1:5]
@@ -60,6 +63,7 @@ MergeRec = si.concatenate_recordings(recording_list)
 # add highpass filter
 MergeRec_f = bandpass_filter(MergeRec, freq_min=300.0, freq_max=6000.0, margin_ms=5.0, dtype=None)
 
+all_chan_ids = MergeRec_f.get_channel_ids()
 
 # select a tetrode
 for tetnum in TetList:
