@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 import spikeinterface.extractors as se
 import spikeinterface as si
 import numpy as np
@@ -10,15 +10,15 @@ from tqdm import tqdm
 
 
 InFolder = "E:/AxonaToNLXtest/"
-OutFolder = "E:/AxonaToNLXtest/pos/"
+OutFolder = "E:/AxonaToNLXtest/both/"
 Probepath ="C:/Users/leemburg/Desktop/OEphystest/"
 ChanList = 'Tetlist.txt' # text file listing good and bad channels
 BaseName = 'HD263-2811_'
 TetList = [2,4,6] #analyse only these tetrodes (1-based, as on drive)
-numsess = 3 #number of sessions to read (e.g: numsess = 4 reads bin 01 to 04)
+numsess = 1 #number of sessions/bin files to read (e.g: numsess = 4 reads bin 01 to 04)
 
 spike_thresh = 5 # detection threshold for spike detection is spike_thresh* signal SD
-spike_sign = 'pos' #detect peaks. can be: 'neg', 'pos', 'both'
+spike_sign = 'both' #detect peaks. can be: 'neg', 'pos', 'both'
 
 # !!! need to manually edit the .set files so that all channels get read. 
 
@@ -60,16 +60,13 @@ for f in allsess:
 # merge recording objects 
 MergeRec = si.concatenate_recordings(recording_list)
 
-# add highpass filter
-MergeRec_f = bandpass_filter(MergeRec, freq_min=300.0, freq_max=6000.0, margin_ms=5.0, dtype=None)
-
-all_chan_ids = MergeRec_f.get_channel_ids()
+all_chan_ids = MergeRec.get_channel_ids()
 
 # select a tetrode
 for tetnum in TetList:
 
     tet_chan_ids = all_chan_ids[np.where(tetgrouping == tetnum-1)]
-    tetname = TetList[tetnum-1]
+    tetname = tetnum
 
     if np.size(tet_chan_ids)>2:
         
@@ -86,7 +83,7 @@ for tetnum in TetList:
     myprobe = read_prb(Probepath + "/" + probename)
 
     #select channels and add probe
-    thistet = MergeRec_f.channel_slice(tet_chan_ids, renamed_channel_ids=new_chans)
+    thistet = MergeRec.channel_slice(tet_chan_ids, renamed_channel_ids=new_chans)
     thistet = thistet.set_probegroup(myprobe)
 
     # preprocess (filter)
@@ -120,6 +117,6 @@ for tetnum in TetList:
 
    #save peaks to mat file (for later processing with Mat2NlxSpike to generate .ntt file)
     print('saving to mat file')
-    outname = OutFolder+"tt"+str(tetname) + '.mat'
+    outname = OutFolder+BaseName+"tt"+str(tetname) + '.mat'
     savemat(outname, {"Timestamps":TetPeaks['sample_index'], "Spikes": allWFs})        
         
