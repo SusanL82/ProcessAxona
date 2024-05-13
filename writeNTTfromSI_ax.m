@@ -5,13 +5,22 @@
 % Inpath = 'D:\SEPSIS\ntt_test'; % path with input file
 % Outpath = 'D:\SEPSIS\ntt_test'; %path for storing the generated .ntt
 % Filename = 'HD190-1511_tt2.mat'; %name of input file, this is the .mat generated
-% by spikeinterface with ExtractPeaksAxonaSI,py
+% by spikeinterface with ExtractSpikesAxonaSI.py
 
-function [Filename] = writeNTTfromSI_ax(Inpath, Outpath, Filename)
+function [Filename] = writeNTTfromSI_ax(Inpath, Outpath, Filename, addScFac)
 
 %% load SI data
 %get waveforms and timestamps
-load([Inpath,'\',Filename])
+load([Inpath,'\',Filename],'Spikes','Timestamps')
+
+%% convert to correct formats
+Timestamps = double(Timestamps);
+Fs = 24000; %sampling rate
+microsamp = (10^6)/Fs; %microsecond per sample
+Timestamps = Timestamps*microsamp; %convert to microseconds
+
+Spikes = double(Spikes); % convert to doubleif Spikes and Timestamps are not double, everything BSODs.
+Spikes = -(Spikes); 
 
 %% add fourth channel if missing
 if min(size(Spikes)) == 3
@@ -19,6 +28,21 @@ if min(size(Spikes)) == 3
     Spikes = [Spikes,filler];
     clear filler
 end
+
+%% add automated scaling
+if addScFac == 1
+    
+    maxval = max(max(max((abs(Spikes)))));
+    ScFac = 25000/maxval;
+    ScFac = round(ScFac);
+    
+    Spikes = Spikes*ScFac;
+    
+else
+    ScFac = 1;
+end
+
+
 
 %% write .ntt
 
