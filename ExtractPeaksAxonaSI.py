@@ -1,34 +1,44 @@
 # -*- coding: utf-8 -*-
-
-import spikeinterface as si
 import spikeinterface.extractors as se
-from scipy.io import savemat
 import numpy as np
+from probeinterface import read_prb
 from spikeinterface.sortingcomponents.peak_detection import detect_peaks
 from spikeinterface.preprocessing import bandpass_filter
+from scipy.io import savemat
 from tqdm import tqdm
-from probeinterface import Probe
 
-InFolder = "D:/SEPSIS/"
-OutFolder = "D:/SEPSIS/ntt_test/"
-BaseName ="HD190-1511_"
-ChanList = 'tetlist.txt' # text file listing good and bad channels, must be in InFolder
 
-numsess = 2 #number of sessions/ .bin files
-Tetnums = [2,4,5,6,7,8,9,11] #tetrodes to process (1-based, same as on the rat/rec)
+InFolder = "E:/AxonaToNLXtest/"
+OutFolder = "E:/AxonaToNLXtest/pos/"
+Probepath ="C:/Users/leemburg/Desktop/OEphystest/"
+ChanList = 'chanlist.txt' # text file listing good and bad channels
+TetList = [2,4,6] #analyse only these tetrodes (1-based, as on drive)
+
 spike_thresh = 5 # detection threshold for spike detection is spike_thresh* signal SD
-spike_sign = 'neg' #detect negative peaks only. can be: 'neg', 'pos', 'both'
-spike_sweep = 0.1 #exclude spikes detected within x ms. Cheetah uses 0.75ms
-spike_radius = 30 #local neighborhood for exclusive spike detection (in this case, the whole tetrode group where tetrodes are 10um apart)
-
+spike_sign = 'both' #detect peaks. can be: 'neg', 'pos', 'both'
 
 # !!! need to manually edit the .set files so that all channels get read. 
 
 ##############################################################################
 
-# get bad channel list
+tetgrouping = np.array([0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8,
+                        9,9,9,9,10,10,10,10,11,11,11,11,12,12,12,12,13,13,13,13,14,14,14,14,
+                        15,15,15,15,15])
+
+# read bad channel list, set bad channels to 17
 tetlist = np.loadtxt(InFolder + '/' + ChanList,
                  delimiter=",")
+
+for tetnum in range(8):
+        thistet = np.where(tetgrouping==tetnum)
+        thistet = np.array(thistet)
+        thesewires = tetlist[tetnum,1:5]
+        badwires = np.where(thesewires==0)
+        badwires = np.array(badwires)
+        badchans = thistet[0][badwires]
+        tetgrouping[badchans]=17
+
+
 
 # make file list
 allsess = range(numsess) #count sessions zero-based
@@ -51,70 +61,61 @@ MergeRec = si.concatenate_recordings(recording_list)
 MergeRec_f = bandpass_filter(MergeRec, freq_min=300.0, freq_max=6000.0, margin_ms=5.0, dtype=None)
 
 
-# detect peaks per tetrode and get trace segments for waveforms
-for tet in range(np.size(Tetnums)):
-       
-        thistet = Tetnums[tet]
-        tetchans = tetlist[thistet-1,1:5]   
+# select a tetrode
+for tetnum in TetList:
+
+    tet_chan_ids = all_chan_ids[np.where(tetgrouping == tetnum-1)]
+    tetname = TetList[tetnum-1]
+
+    if np.size(tet_chan_ids)>2:
         
-        print('processing TT'+str(thistet))
+        # 4-wire tetrode
+        if np.size(tet_chan_ids) == 4:
+           new_chans = [0,1,2,3]
+           probename = "tet4_probe.prb"
         
-        # get channel IDs for good channels
-        gettet = thistet-1
-        a = 4;
-        chanIDs1 = gettet*a
-        chanIDs2 = chanIDs1 + 4
-        chanlist = range(chanIDs1,chanIDs2)
-        chanlist = chanlist * tetchans
+        # 3-wire tetrode
+        if np.size(tet_chan_ids) == 3:
+            new_chans = [0,1,2]
+            probename = "tet3_probe.prb"
         
-        goodchans = np.where(tetchans==1)
-        goodchans = np.array(goodchans)
-        chanlist = chanlist[goodchans]
-        
-        #make tetrode layout
-        xcoords = [0,0,10,10]
-        ycoords = [0,10,0,10]
-        #make probe for these channels
-        positions = np.zeros((np.size(chanlist), 2))
-        for p in range(np.size(chanlist)):
-            x = xcoords[p]
-            y = ycoords[p]
-            positions[p] = x, y
-        probe = Probe(ndim=2, si_units='um')
-        probe.set_contacts(positions=positions, shapes='circle', shape_params={'radius': 5})
-        
-        
-        chanlist = ["{:01d}".format(x) for x in chanlist]
-       
-        TheseSigs = MergeRec_f.channel_slice(channel_ids = chanlist)
-        TheseSigs = TheseSigs.set_probe(probe)
-        TetPeaks = detect_peaks(TheseSigs, method='locally_exclusive', pipeline_nodes = None, gather_mode='memory', folder=None, names=None, 
-                                peak_sign=spike_sign, detect_threshold= spike_thresh, exclude_sweep_ms = spike_sweep, radius_um = spike_radius)
-                 #TetPeaks has fields: sample_index, channel_index, amplitude, segment_index
-        
-        
-        # get waveforms. must be 32 samples long, I'm setting peak at sample 8 (same as NLX)
-        prepeak = 8 
-        postpeak = 24
-       
-        print('extracting waveforms')
-        
-        allWFs = np.zeros([32,4,len(TetPeaks['sample_index'])], dtype = 'int16') 
-        for p in tqdm(range(len(TetPeaks['sample_index'])), desc="collecting waveforms"):
-            sf = TetPeaks['sample_index'][p] - prepeak
-            ef = TetPeaks['sample_index'][p] + postpeak
-        
-            thisWF = TheseSigs.get_traces(segment_index = None, start_frame = sf, end_frame = ef)
-           
-            #write only complete spike waveforms (might skip last spike if too short)
-            if np.size(thisWF,0) == 32:
-                allWFs[:,:,p] = thisWF           
-            
-            del thisWF
-       
-        #save peaks to mat file (for later processing with Mat2NlxSpike to generate .ntt file)
-        print('saving to mat file')
-        outname = OutFolder+BaseName+"tt"+str(thistet) +'.mat'
-        savemat(outname,{"Timestamps":TetPeaks['sample_index'], "Spikes": allWFs})e_index'], "Spikes": allWFs})
-        
+    myprobe = read_prb(Probepath + "/" + probename)
+
+    #select channels and add probe
+    thistet = MergeRec_f.channel_slice(tet_chan_ids, renamed_channel_ids=new_chans)
+    thistet = thistet.set_probegroup(myprobe)
+
+    # preprocess (filter)
+    thistet_f = bandpass_filter(thistet, freq_min=600, freq_max=6000)
+
+    #detect peaks
+    detectradius = 30 #tetrode channel group is 10x10um square, this radius should capture all spikes in this channelgroup
+    #2 versions of function from 2 versions of spikeinterface. Yuck.
+    #TetPeaks = detect_peaks(thistet_f, method='locally_exclusive', peak_sign=spike_sign, detect_threshold=spike_thresh, exclude_sweep_ms=0.1, local_radius_um=detectradius, noise_levels=None,)
+    TetPeaks = detect_peaks(thistet_f, method='locally_exclusive', peak_sign=spike_sign, detect_threshold=spike_thresh, exclude_sweep_ms=0.1, radius_um=detectradius, noise_levels=None,)
+
+
+    # get waveforms. must be 32 samples long, I'm setting peak at sample 8 (same as NLX)
+    prepeak = 8
+    postpeak = 24
+
+    print('extracting waveforms')
+
+    allWFs = np.zeros([32, 4, len(TetPeaks['sample_index'])], dtype='int16')
+    for p in tqdm(range(len(TetPeaks['sample_index'])), desc="collecting waveforms"):
+        sf = TetPeaks['sample_index'][p] - prepeak
+        ef = TetPeaks['sample_index'][p] + postpeak
+
+        thisWF = thistet_f.get_traces(segment_index=None, start_frame=sf, end_frame=ef)
+
+        #write only complete spike waveforms (might skip last spike if too short)
+        if np.size(thisWF, 0) == 32:
+           allWFs[:, :, p] = thisWF
+
+        del thisWF
+
+   #save peaks to mat file (for later processing with Mat2NlxSpike to generate .ntt file)
+    print('saving to mat file')
+    outname = OutFolder+"tt"+str(tetname) + '.mat'
+    savemat(outname, {"Timestamps":TetPeaks['sample_index'], "Spikes": allWFs})        
         
